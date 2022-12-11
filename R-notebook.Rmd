@@ -1,0 +1,100 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(tidyverse)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+```{r}
+dt = read_csv("data.csv")
+
+dt$`Baseline File Count` = NULL
+dt$`Intervention File Count` = NULL
+dt$ID = NULL
+dt$Participation = NULL
+dt$`Score Impact` = NULL
+
+```
+
+```{r}
+dt['Score Impact'] = dt['Baseline Average Safety Score'] - dt['Intervention Average Safety Score']
+anova(aov(`Score Impact` ~ `Haptic Group`, data=dt))
+
+t.test(dt$`Score Impact`)
+
+```
+
+```{r}
+
+dt_imputed = dt
+int_missing_idx = which(is.na(dt$`Intervention Average Lift Rate`))
+base_missing_idx = which(is.na(dt$`Baseline Average Lift Rate`))
+
+int_lift_rate_model = lm(`Intervention Average Lift Rate` ~ `Baseline Average Lift Rate`, data=dt)
+int_predicted_lift_rates = predict(int_lift_rate_model, dt[int_missing_idx,])
+dt_imputed$`Intervention Average Lift Rate`[int_missing_idx] = int_predicted_lift_rates
+
+base_lift_rate_model = lm(`Baseline Average Lift Rate` ~ `Intervention Average Lift Rate`, data=dt)
+base_predicted_lift_rates = predict(base_lift_rate_model, dt[base_missing_idx,])
+dt_imputed$`Baseline Average Lift Rate`[base_missing_idx] = base_predicted_lift_rates
+
+
+int_safety_score_model = lm(`Intervention Average Safety Score` ~ `Intervention Average Lift Rate`, data=dt)
+int_predicted_safety_scores = predict(int_safety_score_model, dt_imputed[int_missing_idx, ])
+dt_imputed$`Intervention Average Safety Score`[int_missing_idx] = int_predicted_safety_scores
+
+base_safety_score_model = lm(`Baseline Average Safety Score` ~ `Baseline Average Lift Rate`, data=dt)
+base_predicted_safety_scores = predict(base_safety_score_model, dt_imputed[base_missing_idx, ])
+dt_imputed$`Baseline Average Safety Score`[base_missing_idx] = base_predicted_safety_scores
+
+
+dt_imputed['Score Impact'] = dt_imputed['Baseline Average Safety Score'] - dt_imputed['Intervention Average Safety Score']
+anova(aov(`Score Impact` ~ `Haptic Group`, data=dt_imputed))
+
+t.test(dt_imputed$`Score Impact`)
+
+```
+```{r}
+dt_imputed %>% group_by(`Haptic Group`) %>% summarize(avg = mean(`Score Impact`))
+
+dt %>% drop_na() %>% group_by(`Haptic Group`) %>% summarize(avg = mean(`Score Impact`))
+```
+
+
+```{r}
+
+t.test(dt$`Baseline Average Safety Score`[int_missing_idx], dt$`Baseline Average Safety Score`[which(!is.na(dt$`Intervention Average Lift Rate`))])
+
+
+t.test(dt$`Baseline Average Lift Rate`[int_missing_idx], dt$`Baseline Average Lift Rate`[which(!is.na(dt$`Intervention Average Lift Rate`))])
+
+
+t.test(dt$`Intervention Average Safety Score`[base_missing_idx], dt$`Intervention Average Safety Score`[which(!is.na(dt$`Baseline Average Lift Rate`))])
+
+
+t.test(dt$`Intervention Average Lift Rate`[base_missing_idx], dt$`Intervention Average Lift Rate`[which(!is.na(dt$`Baseline Average Lift Rate`))])
+```
+
+
+
+```{r}
+melted_dt = read_csv("melted_data.csv")
+
+library(ez)
+
+summary(lm(`Average Safety Score` ~ `Haptic Group` + `Stage` + `Average Lift Rate` + `Haptic Group`:`Average Lift Rate`, data=melted_dt))
+
+```
+
